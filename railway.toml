@@ -7,4 +7,4 @@ providers = ["python"]
 [deploy]
 startCommand = "gunicorn app:app -c gunicorn_config.py"
 restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
+restartPolicyMaxRetries = 10
