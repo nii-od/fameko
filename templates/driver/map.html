@@ -971,7 +971,7 @@ function connectWebSocket() {
         
         // Connect to routing service WebSocket (Go service on port 8012)
         // Use environment variable ROUTING_SERVICE_URL if set, otherwise use default
-        const routingServiceUrl = "{{ os.environ.get('ROUTING_SERVICE_URL', 'ws://127.0.0.1:8012') }}";
+        const routingServiceUrl = "{{ routing_service_url }}";
         const wsUrl = `${routingServiceUrl}/ws/driver/${encodeURIComponent(driverId)}`;
         console.log("Connecting to routing service:", wsUrl);
         
@@ -2369,7 +2369,7 @@ async function calculateRouteInBackground(start, end, vehicleType, routeType) {
         
         try {
             console.log('Attempting Python service for real roads...');
-            const routingServiceHttpUrl = "{{ os.environ.get('ROUTING_SERVICE_HTTP_URL', 'http://127.0.0.1:8012') }}";
+            const routingServiceHttpUrl = "{{ routing_service_url }}";
             response = await fetch(`${routingServiceHttpUrl}/route`, {
                 method: 'POST',
                 headers: {
@@ -2398,7 +2398,7 @@ async function calculateRouteInBackground(start, end, vehicleType, routeType) {
             console.warn('Python service not available, trying Go service fallback:', pythonError);
             
             // Fallback to Go service if Python service fails
-            const routingServiceHttpUrl = "{{ os.environ.get('ROUTING_SERVICE_HTTP_URL', 'http://127.0.0.1:8012') }}";
+            const routingServiceHttpUrl = "{{ routing_service_url }}";
             response = await fetch(`${routingServiceHttpUrl}/route/calculate`, {
                 method: 'POST',
                 headers: {
