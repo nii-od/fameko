@@ -1,7 +1,12 @@
 fastapi==0.103.0
 uvicorn==0.23.2
 networkx==3.1
+osmnx==1.6.0
+numpy==1.24.3
+pandas==2.0.3
+shapely==2.0.1
+scipy==1.11.2
+folium==0.14.0
 google-api-python-client==2.108.0
 google-auth==2.50.0
 python-dotenv==1.0.0
-
