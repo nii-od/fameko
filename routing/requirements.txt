@@ -1,0 +1,6 @@
+fastapi==0.103.0
+uvicorn==0.23.2
+networkx==3.1
+google-api-python-client==2.108.0
+google-auth==2.50.0
+python-dotenv==1.0.0
