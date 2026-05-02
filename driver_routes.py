@@ -1000,10 +1000,14 @@ def map():
         Delivery.status.in_(['Assigned', 'In Transit', 'Accepted'])
     ).all()
     
+    import os
+    routing_service_url = os.environ.get('ROUTING_SERVICE_URL', 'https://routing-service-production-3ce8.up.railway.app')
+    
     return render_template('driver/map.html', 
                           driver=current_user,
                           driver_location=driver_loc,
-                          active_deliveries=active_deliveries)
+                          active_deliveries=active_deliveries,
+                          routing_service_url=routing_service_url)
 
 
 # ---------------- Driver Messaging & Calls ----------------
