@@ -1,8 +1,8 @@
 import multiprocessing
 import os
 
-# Worker class for Flask-SocketIO with gevent
-worker_class = 'gevent'
+# Worker class for Flask-SocketIO with gevent WebSocket support
+worker_class = 'geventwebsocket.gunicorn.workers.GeventWebSocketWorker'
 # Use fewer workers to prevent memory issues on Railway (1GB RAM limit)
 workers = 2
 
