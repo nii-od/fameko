@@ -275,6 +275,10 @@
                 }
             }
 
+            // Get user ID from server data
+            const serverData = document.getElementById('server-data');
+            const userId = serverData ? serverData.dataset.userId : '';
+
             function openCallPopup(params) {
                 if (callPopupWindow && !callPopupWindow.closed) {
                     callPopupWindow.close();
@@ -282,6 +286,7 @@
                 const queryParams = new URLSearchParams({
                     call_id: params.call_id,
                     user_type: params.user_type,
+                    user_id: userId,
                     remote_id: params.remote_id,
                     remote_name: params.remote_name || '',
                     delivery_id: params.delivery_id || '',
@@ -366,5 +371,7 @@
             }
         });
     </script>
+    <!-- Server-side data for client scripts -->
+    <input type="hidden" id="server-data" data-user-id="{{ current_user.id if current_user.is_authenticated else '' }}">
 </body>
 </html>
