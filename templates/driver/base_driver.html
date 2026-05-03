@@ -541,14 +541,108 @@
             if (!sd) return;
             const userId = sd.dataset.userId;
             if (!userId) return;
+
+            let callAudio = null;
+            let soundEnabled = false;
+            let soundEnabledByInteraction = false;
+            let callPopupWindow = null;
+
+            // Enable sound on first user interaction
+            document.addEventListener('click', function enableSoundOnInteraction() {
+                if (!soundEnabledByInteraction) {
+                    soundEnabledByInteraction = true;
+                    soundEnabled = true;
+                    console.log('[DRIVER BASE] Sound enabled by user interaction');
+                }
+            }, { once: true });
+
+            function playIncomingCallSound() {
+                if (!soundEnabledByInteraction) return;
+                try {
+                    if (!callAudio) {
+                        callAudio = new Audio('/static/sounds/mixkit-clear-announce-tones-2861.wav');
+                        callAudio.loop = true;
+                    }
+                    callAudio.play().catch(e => console.warn('[DRIVER BASE] Audio play failed:', e));
+                } catch (e) {
+                    console.warn('[DRIVER BASE] Error playing sound:', e);
+                }
+            }
+
+            function stopIncomingCallSound() {
+                if (callAudio) {
+                    callAudio.pause();
+                    callAudio.currentTime = 0;
+                }
+            }
+
+            function openCallPopup(params) {
+                console.log('[DRIVER BASE] Opening call popup:', params);
+                if (callPopupWindow && !callPopupWindow.closed) {
+                    callPopupWindow.close();
+                }
+                const queryParams = new URLSearchParams({
+                    call_id: params.call_id,
+                    user_type: params.user_type,
+                    remote_id: params.remote_id,
+                    remote_name: params.remote_name || '',
+                    delivery_id: params.delivery_id || '',
+                    incoming: params.incoming ? 'true' : 'false'
+                }).toString();
+                const popupUrl = `/call-popup?${queryParams}`;
+                const popupFeatures = 'width=360,height=500,resizable=yes,scrollbars=no,status=no,location=no,menubar=no,toolbar=no';
+                callPopupWindow = window.open(popupUrl, 'fameko-call', popupFeatures);
+                if (callPopupWindow) {
+                    callPopupWindow.focus();
+                } else {
+                    alert('Please allow popups for this site to receive calls');
+                }
+            }
+
             try {
                 const socket = io('/driver', { transports: ['websocket'] });
-                socket.on('connect', () => console.debug('Socket.IO connected to /driver (websocket only)'));
+                socket.on('connect', () => {
+                    console.log('[DRIVER BASE] Socket.IO connected to /driver');
+                    socket.emit('authenticate', { driver_id: userId });
+                });
+
+                // Handle incoming calls on ANY page
+                socket.on('call_incoming', (data) => {
+                    console.log('[DRIVER BASE] Incoming call:', data);
+                    playIncomingCallSound();
+                    openCallPopup({
+                        call_id: data.call_id,
+                        user_type: 'driver',
+                        remote_id: data.customer_id,
+                        remote_name: data.customer_name || 'Customer',
+                        delivery_id: data.delivery_id,
+                        incoming: true
+                    });
+                });
+
+                // Handle outgoing call acceptance
+                socket.on('call_initiated', (data) => {
+                    console.log('[DRIVER BASE] Call initiated:', data);
+                    openCallPopup({
+                        call_id: data.call_id,
+                        user_type: 'driver',
+                        remote_id: data.customer_id,
+                        remote_name: data.customer_name || 'Customer',
+                        delivery_id: data.delivery_id,
+                        incoming: false
+                    });
+                });
+
+                socket.on('call_ended', () => {
+                    console.log('[DRIVER BASE] Call ended');
+                    stopIncomingCallSound();
+                });
+
                 socket.on('new_message', (payload) => {
                     window.dispatchEvent(new CustomEvent('new_message', { detail: payload }));
                 });
             } catch (e) {
-                console.warn('Socket.IO init failed', e);
+                console.warn('[DRIVER BASE] Socket.IO init failed', e);
             }
         });
     </script>
