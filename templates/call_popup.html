@@ -162,16 +162,17 @@
 
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script>
-        // Get call parameters from URL
+        // Get URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const callId = urlParams.get('call_id');
-        const userType = urlParams.get('user_type'); // 'driver' or 'customer'
+        const userType = urlParams.get('user_type');
+        const userId = urlParams.get('user_id');
         const remoteId = urlParams.get('remote_id');
         const remoteName = urlParams.get('remote_name');
         const deliveryId = urlParams.get('delivery_id');
         const isIncoming = urlParams.get('incoming') === 'true';
         const socketNamespace = userType === 'driver' ? '/driver' : '/customer';
-        const roomName = userType === 'driver' ? `driver_${remoteId}` : `customer_${remoteId}`;
+        const roomName = userType === 'driver' ? `driver_${userId}` : `customer_${userId}`;
 
         // Update UI with caller info
         document.getElementById('callerName').textContent = remoteName || 'Unknown';
@@ -213,8 +214,8 @@
 
             socket.on('connect', () => {
                 console.log('[CALL POPUP] Socket connected:', socket.id);
-                // Authenticate
-                socket.emit('authenticate', userType === 'driver' ? { driver_id: remoteId } : { customer_id: remoteId });
+                // Authenticate with local user ID
+                socket.emit('authenticate', userType === 'driver' ? { driver_id: userId } : { customer_id: userId });
             });
 
             // WebRTC signaling events
