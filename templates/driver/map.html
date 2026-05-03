@@ -1218,8 +1218,6 @@ function connectSocketIO() {
         socket.on('call_incoming', (data) => {
             try {
                 console.log('[DRIVER] Incoming call via Socket.IO:', data);
-                currentCallId = data.call_id;
-                console.log('[DRIVER] Current call ID set to:', currentCallId);
 
                 // Enable sound first before playing
                 if (!soundEnabledByInteraction) {
@@ -1231,8 +1229,15 @@ function connectSocketIO() {
                 // Play incoming call sound
                 playIncomingCallSound();
 
-                // Create and show call modal
-                showIncomingCallModal(data);
+                // Open persistent call popup window
+                openCallPopup({
+                    call_id: data.call_id,
+                    user_type: 'driver',
+                    remote_id: data.customer_id,
+                    remote_name: data.customer_name || 'Customer',
+                    delivery_id: data.delivery_id,
+                    incoming: true
+                });
 
             } catch (e) { console.error('[DRIVER] Error handling incoming call:', e); }
         });
@@ -1241,10 +1246,15 @@ function connectSocketIO() {
         socket.on('call_initiated', (data) => {
             try {
                 console.log('[DRIVER] Call initiated:', data);
-                if (data.call_id) {
-                    currentCallId = data.call_id;
-                    console.log('[DRIVER] Current call ID set for outgoing call:', currentCallId);
-                }
+                // Open persistent call popup for outgoing call
+                openCallPopup({
+                    call_id: data.call_id,
+                    user_type: 'driver',
+                    remote_id: data.customer_id,
+                    remote_name: data.customer_name || 'Customer',
+                    delivery_id: data.delivery_id,
+                    incoming: false
+                });
             } catch (e) { console.error('[DRIVER] Error handling call_initiated:', e); }
         });
 
@@ -1252,25 +1262,8 @@ function connectSocketIO() {
             try {
                 console.log('[DRIVER] Call ended:', data);
                 stopIncomingCallSound();
-                endDriverCall();
+                // The popup handles its own cleanup
             } catch (e) { console.error('[DRIVER] Error handling call end:', e); }
-        });
-
-        socket.on('call_accepted_by_customer', (data) => {
-            try {
-                console.log('[DRIVER] ✓ Customer accepted our call:', data);
-                // Update outgoing call modal to show connected state
-                if (window.outgoingCallInfo) {
-                    acceptIncomingWhileCalling();
-                }
-                // Initiate WebRTC audio connection - driver creates offer (as caller)
-                setupWebRTC().then(() => {
-                    console.log('[DRIVER] WebRTC setup complete, creating offer');
-                    createOffer();
-                }).catch(err => {
-                    console.error('[DRIVER] WebRTC setup failed:', err);
-                });
-            } catch (e) { console.error('[DRIVER] Error handling customer call acceptance:', e); }
         });
 
         // ─── WebRTC Signaling Events ──────────────────────
@@ -3488,6 +3481,45 @@ function cleanupWebRTC() {
     if (remoteAudio) {
         remoteAudio.srcObject = null;
     }
+}
+
+// Open persistent call popup window that survives page navigation
+let callPopupWindow = null;
+function openCallPopup(params) {
+    console.log('[DRIVER] Opening call popup with params:', params);
+
+    // Close existing popup if any
+    if (callPopupWindow && !callPopupWindow.closed) {
+        callPopupWindow.close();
+    }
+
+    // Build popup URL with parameters
+    const queryParams = new URLSearchParams({
+        call_id: params.call_id,
+        user_type: params.user_type,
+        remote_id: params.remote_id,
+        remote_name: params.remote_name || '',
+        delivery_id: params.delivery_id || '',
+        incoming: params.incoming ? 'true' : 'false'
+    }).toString();
+
+    const popupUrl = `/call-popup?${queryParams}`;
+    console.log('[DRIVER] Popup URL:', popupUrl);
+
+    // Open popup window (small, always on top style)
+    const popupFeatures = 'width=360,height=500,resizable=yes,scrollbars=no,status=no,location=no,menubar=no,toolbar=no';
+    callPopupWindow = window.open(popupUrl, 'fameko-call', popupFeatures);
+
+    if (callPopupWindow) {
+        console.log('[DRIVER] Call popup opened successfully');
+        // Focus the popup
+        callPopupWindow.focus();
+    } else {
+        console.error('[DRIVER] Failed to open call popup - popup blocker?');
+        alert('Please allow popups for this site to receive calls');
+    }
+
+    return callPopupWindow;
 }
 
 function enableSound() {
