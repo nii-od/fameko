@@ -919,6 +919,20 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('[TRACK] ICE connection state:', peerConnection.iceConnectionState);
       };
 
+      peerConnection.onconnectionstatechange = () => {
+        console.log('[TRACK] Connection state:', peerConnection.connectionState);
+        if (peerConnection.connectionState === 'connected') {
+          console.log('[TRACK] ✓ WebRTC connected!');
+          // Update UI to show connected
+          const statusEl = document.getElementById('call-status-text');
+          if (statusEl) statusEl.textContent = 'Connected';
+        } else if (peerConnection.connectionState === 'failed') {
+          console.error('[TRACK] ✗ WebRTC connection failed');
+          const statusEl = document.getElementById('call-status-text');
+          if (statusEl) statusEl.textContent = 'Connection failed';
+        }
+      };
+
       console.log('[TRACK] WebRTC setup complete');
       return peerConnection;
     } catch (error) {
@@ -933,14 +947,17 @@ document.addEventListener('DOMContentLoaded', function () {
         await setupWebRTC();
       }
 
+      console.log('[TRACK] Creating offer for call_id:', currentCallId);
+
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
 
-      console.log('[TRACK] Created offer, sending to peer');
+      console.log('[TRACK] Created offer, sending to peer. Call ID:', currentCallId);
       socket.emit('webrtc_offer', {
         call_id: currentCallId,
         offer: offer
       });
+      console.log('[TRACK] Offer emitted to server');
     } catch (error) {
       console.error('[TRACK] Error creating offer:', error);
     }
@@ -948,21 +965,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
   async function handleOffer(offer) {
     try {
-      console.log('[TRACK] Received offer, creating answer');
+      console.log('[TRACK] Received offer, creating answer. Call ID:', currentCallId);
       if (!peerConnection) {
+        console.log('[TRACK] No peer connection, setting up WebRTC');
         await setupWebRTC();
       }
 
+      console.log('[TRACK] Setting remote description (offer)');
       await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+      console.log('[TRACK] Remote description set');
 
       const answer = await peerConnection.createAnswer();
+      console.log('[TRACK] Answer created');
       await peerConnection.setLocalDescription(answer);
+      console.log('[TRACK] Local description set (answer)');
 
-      console.log('[TRACK] Created answer, sending to peer');
+      console.log('[TRACK] Sending answer to peer. Call ID:', currentCallId);
       socket.emit('webrtc_answer', {
         call_id: currentCallId,
         answer: answer
       });
+      console.log('[TRACK] Answer emitted to server');
     } catch (error) {
       console.error('[TRACK] Error handling offer:', error);
     }
@@ -970,12 +993,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
   async function handleAnswer(answer) {
     try {
-      console.log('[TRACK] Received answer');
+      console.log('[TRACK] Received answer for call:', currentCallId);
       if (!peerConnection) {
+        console.log('[TRACK] No peer connection, setting up WebRTC');
         await setupWebRTC();
       }
 
+      console.log('[TRACK] Setting remote description (answer)');
       await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+      console.log('[TRACK] Answer set successfully');
     } catch (error) {
       console.error('[TRACK] Error handling answer:', error);
     }
