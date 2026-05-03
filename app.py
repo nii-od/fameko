@@ -70,14 +70,15 @@ def create_app(config=None):
     # Initialize database tables
     init_db(app)
 
-    # Download GraphML files from Google Drive if configured
-    if os.environ.get('GOOGLE_DRIVE_ASHANTI_FILE_ID'):
-        try:
-            from utils.google_drive import download_graphml_files
-            logger.info("Downloading GraphML files from Google Drive...")
-            download_graphml_files()
-        except Exception as e:
-            logger.warning(f"Failed to download GraphML files from Google Drive: {e}")
+    # NOTE: Disabled Google Drive download at startup to prevent memory issues
+    # GraphML files should be included in the repo or downloaded manually
+    # if os.environ.get('GOOGLE_DRIVE_ASHANTI_FILE_ID'):
+    #     try:
+    #         from utils.google_drive import download_graphml_files
+    #         logger.info("Downloading GraphML files from Google Drive...")
+    #         download_graphml_files()
+    #     except Exception as e:
+    #         logger.warning(f"Failed to download GraphML files from Google Drive: {e}")
     
     # Initialize CSRF Protection (init later so we can exempt socket.io)
     csrf = CSRFProtect()
@@ -827,9 +828,18 @@ def create_app(config=None):
     def unified_conversation(conv_id):
         """Unified conversation page accessible to both customer and driver"""
         from models import Conversation, Delivery
+        from sqlalchemy.orm import joinedload
         
         conv = Conversation.query.get_or_404(conv_id)
-        delivery = Delivery.query.get(conv.delivery_id) if conv.delivery_id else None
+        
+        # Load delivery with order and customer relationships
+        if conv.delivery_id:
+            delivery = Delivery.query.options(
+                joinedload(Delivery.order).joinedload('customer'),
+                joinedload(Delivery.driver)
+            ).get(conv.delivery_id)
+        else:
+            delivery = None
         
         # Check access: customer or driver only
         user_type = None
