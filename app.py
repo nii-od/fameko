@@ -477,7 +477,7 @@ def create_app(config=None):
         logger.info(f"Driver {current_user.id} accepted call from customer {customer_id}")
         
         # Notify customer that call was accepted
-        logger.debug(f"Emitting 'call_accepted' to room customer_{customer_id} namespace /customer")
+        logger.info(f"[CALL] Emitting 'call_accepted' to room customer_{customer_id} namespace /customer")
         socketio.emit('call_accepted', {
             'driver_id': current_user.id,
             'driver_name': current_user.full_name,
@@ -497,7 +497,7 @@ def create_app(config=None):
         logger.info(f"Driver {current_user.id} rejected call from customer {customer_id}")
         
         # Notify customer that call was rejected
-        logger.debug(f"Emitting 'call_rejected' to room customer_{customer_id} namespace /customer")
+        logger.info(f"[CALL] Emitting 'call_rejected' to room customer_{customer_id} namespace /customer")
         socketio.emit('call_rejected', {
             'call_id': call_id,
             'reason': 'Driver declined'
@@ -538,7 +538,7 @@ def create_app(config=None):
         logger.info(f"Customer {current_user.id} accepted incoming call from driver {driver_id}")
         
         # Notify driver that customer accepted
-        logger.debug(f"Emitting 'call_accepted_by_customer' to room driver_{driver_id} namespace /driver")
+        logger.info(f"[CALL] Emitting 'call_accepted_by_customer' to room driver_{driver_id} namespace /driver")
         socketio.emit('call_accepted_by_customer', {
             'driver_id': driver_id,
             'call_id': call_id
@@ -830,7 +830,12 @@ def create_app(config=None):
         logger.info(f"Admin {username} created successfully")
     
     # ===================== HOME ROUTE =====================
-    
+
+    @app.route('/call-popup', methods=['GET'])
+    def call_popup():
+        """Dedicated call popup page that persists across navigation"""
+        return render_template('call_popup.html')
+
     @app.route('/conversation/<int:conv_id>', methods=['GET'])
     @login_required
     def unified_conversation(conv_id):
