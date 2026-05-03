@@ -1092,6 +1092,61 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // Show minimized call indicator that restores popup when clicked
+  function showMinimizedCallIndicator(name, status, type) {
+    const existing = document.getElementById('minimized-call-indicator');
+    if (existing) existing.remove();
+
+    const isIncoming = type === 'incoming';
+    const bgColor = isIncoming ? 'rgba(102, 126, 234, 0.9)' : 'rgba(40, 167, 69, 0.9)';
+    const icon = isIncoming ? 'fa-phone-volume' : 'fa-phone';
+    const pulseAnim = isIncoming ? 'animation: pulse 1s infinite;' : '';
+
+    const indicatorHTML = `
+        <div id="minimized-call-indicator" onclick="restoreCallPopup()" style="
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            background: ${bgColor};
+            border-radius: 50px;
+            padding: 12px 20px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            transition: transform 0.2s;
+        " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+            <i class="fas ${icon}" style="font-size: 18px; ${pulseAnim}"></i>
+            <div style="display: flex; flex-direction: column;">
+                <span style="font-weight: 600; font-size: 14px;">${name}</span>
+                <span style="font-size: 11px; opacity: 0.9;">${status}</span>
+            </div>
+            <i class="fas fa-expand" style="margin-left: 8px; opacity: 0.7; font-size: 12px;"></i>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', indicatorHTML);
+  }
+
+  // Restore call popup window when minimized indicator is clicked
+  function restoreCallPopup() {
+    console.log('[TRACK] Restoring call popup');
+    if (window.currentCallInfo) {
+      openCallPopup(window.currentCallInfo);
+    }
+  }
+
+  // Remove minimized indicator when call ends
+  function removeMinimizedCallIndicator() {
+    const indicator = document.getElementById('minimized-call-indicator');
+    if (indicator) indicator.remove();
+    window.currentCallInfo = null;
+  }
+
   function enableSound() {
     try {
       // Create audio context for call notifications
@@ -1176,6 +1231,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Note: Customer doesn't normally receive incoming calls, this is for reference
   });
 
+  // Store current call info globally for popup restoration
+  window.currentCallInfo = null;
+
   socket.on('driver_call_incoming', (data) => {
     console.log('[TRACK] Driver initiated incoming call:', data);
 
@@ -1189,15 +1247,21 @@ document.addEventListener('DOMContentLoaded', function () {
     // Play incoming call sound
     playIncomingCallSound();
 
-    // Open persistent call popup window
-    openCallPopup({
+    // Store call info
+    window.currentCallInfo = {
       call_id: data.call_id,
       user_type: 'customer',
       remote_id: data.driver_id,
       remote_name: data.driver_name || `Driver #${data.driver_id}`,
       delivery_id: data.delivery_id,
       incoming: true
-    });
+    };
+
+    // Open persistent call popup window
+    openCallPopup(window.currentCallInfo);
+
+    // Show minimized inline indicator
+    showMinimizedCallIndicator(data.driver_name || `Driver #${data.driver_id}`, 'Incoming call...', 'incoming');
 
     console.log('[TRACK] Call popup opened for driver', data.driver_id);
   });
@@ -1206,15 +1270,21 @@ document.addEventListener('DOMContentLoaded', function () {
     console.log('[TRACK] Call accepted by driver:', data);
     stopIncomingCallSound();
 
-    // Open persistent call popup for outgoing call
-    openCallPopup({
+    // Store call info
+    window.currentCallInfo = {
       call_id: data.call_id,
       user_type: 'customer',
       remote_id: data.driver_id,
       remote_name: data.driver_name || `Driver #${data.driver_id}`,
       delivery_id: data.delivery_id,
       incoming: false
-    });
+    };
+
+    // Open persistent call popup for outgoing call
+    openCallPopup(window.currentCallInfo);
+
+    // Show minimized inline indicator
+    showMinimizedCallIndicator(data.driver_name || `Driver #${data.driver_id}`, 'Calling...', 'outgoing');
   });
 
   socket.on('call_rejected', (data) => {
@@ -1313,6 +1383,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Cleanup WebRTC
     cleanupWebRTC();
+
+    // Remove minimized call indicator
+    removeMinimizedCallIndicator();
 
     if (callTimerInterval) clearInterval(callTimerInterval);
 
