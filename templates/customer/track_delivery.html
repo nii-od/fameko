@@ -1038,6 +1038,45 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // Open persistent call popup window that survives page navigation
+  let callPopupWindow = null;
+  function openCallPopup(params) {
+    console.log('[TRACK] Opening call popup with params:', params);
+
+    // Close existing popup if any
+    if (callPopupWindow && !callPopupWindow.closed) {
+      callPopupWindow.close();
+    }
+
+    // Build popup URL with parameters
+    const queryParams = new URLSearchParams({
+      call_id: params.call_id,
+      user_type: params.user_type,
+      remote_id: params.remote_id,
+      remote_name: params.remote_name || '',
+      delivery_id: params.delivery_id || '',
+      incoming: params.incoming ? 'true' : 'false'
+    }).toString();
+
+    const popupUrl = `/call-popup?${queryParams}`;
+    console.log('[TRACK] Popup URL:', popupUrl);
+
+    // Open popup window (small, always on top style)
+    const popupFeatures = 'width=360,height=500,resizable=yes,scrollbars=no,status=no,location=no,menubar=no,toolbar=no';
+    callPopupWindow = window.open(popupUrl, 'fameko-call', popupFeatures);
+
+    if (callPopupWindow) {
+      console.log('[TRACK] Call popup opened successfully');
+      // Focus the popup
+      callPopupWindow.focus();
+    } else {
+      console.error('[TRACK] Failed to open call popup - popup blocker?');
+      alert('Please allow popups for this site to receive calls');
+    }
+
+    return callPopupWindow;
+  }
+
   function cleanupWebRTC() {
     console.log('[TRACK] Cleaning up WebRTC');
     if (localStream) {
@@ -1139,8 +1178,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   socket.on('driver_call_incoming', (data) => {
     console.log('[TRACK] Driver initiated incoming call:', data);
-    currentCallId = data.call_id;
-    isDriverInitiatedCall = true;  // Mark as driver-initiated
 
     // Enable sound when incoming call is received
     if (!soundEnabledByInteraction) {
@@ -1152,33 +1189,31 @@ document.addEventListener('DOMContentLoaded', function () {
     // Play incoming call sound
     playIncomingCallSound();
 
-    // Show incoming call modal with driver info
-    const callModal = new bootstrap.Modal(document.getElementById('callModal'));
-    document.getElementById('call-driver-name').textContent = data.driver_name || `Driver #${data.driver_id}`;
-    document.getElementById('call-status-text').textContent = 'Incoming call...';
-    document.getElementById('call-status-icon').innerHTML = '<i class="fas fa-phone" style="animation: pulse 1s infinite;"></i>';
-    document.getElementById('call-timer').style.display = 'none';
-    document.getElementById('accept-call-btn').style.display = 'flex';
+    // Open persistent call popup window
+    openCallPopup({
+      call_id: data.call_id,
+      user_type: 'customer',
+      remote_id: data.driver_id,
+      remote_name: data.driver_name || `Driver #${data.driver_id}`,
+      delivery_id: data.delivery_id,
+      incoming: true
+    });
 
-    callModal.show();
-    console.log('[TRACK] Incoming call modal displayed for driver', data.driver_id);
+    console.log('[TRACK] Call popup opened for driver', data.driver_id);
   });
 
   socket.on('call_accepted', (data) => {
     console.log('[TRACK] Call accepted by driver:', data);
     stopIncomingCallSound();
-    currentCallId = data.call_id;
-    document.getElementById('call-status-text').textContent = 'Connecting audio...';
-    document.getElementById('call-status-icon').innerHTML = '<i class="fas fa-phone" style="animation: pulse 1s infinite;"></i>';
-    callStartTime = Date.now();
-    startCallTimer();
 
-    // Customer initiated call - customer creates offer (as caller)
-    setupWebRTC().then(() => {
-      console.log('[TRACK] WebRTC setup complete, creating offer');
-      createOffer();
-    }).catch(err => {
-      console.error('[TRACK] WebRTC setup failed:', err);
+    // Open persistent call popup for outgoing call
+    openCallPopup({
+      call_id: data.call_id,
+      user_type: 'customer',
+      remote_id: data.driver_id,
+      remote_name: data.driver_name || `Driver #${data.driver_id}`,
+      delivery_id: data.delivery_id,
+      incoming: false
     });
   });
 
