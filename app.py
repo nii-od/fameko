@@ -592,6 +592,14 @@ def create_app(config=None):
         result = socketio.emit('driver_call_incoming', call_payload, room=f'customer_{customer_id}', namespace='/customer')
         logger.info(f"[CALL] Emit result: {result}")
 
+        # Send call_id back to driver so they can use it for WebRTC signaling
+        emit('call_initiated', {
+            'call_id': call_payload['call_id'],
+            'customer_id': customer_id,
+            'delivery_id': delivery_id,
+            'status': 'ringing'
+        })
+
         # Diagnostic: check whether the customer room had participants
         participants = []
         try:
