@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fameko Call</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            overflow: hidden;
+        }
+        .call-container {
+            text-align: center;
+            padding: 20px;
+        }
+        .avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            margin: 0 auto 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+        }
+        .call-status {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+        .caller-name {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .call-timer {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 30px;
+            font-variant-numeric: tabular-nums;
+        }
+        .call-controls {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+        .control-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        .control-btn:hover {
+            transform: scale(1.05);
+        }
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+        .btn-mute {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        .btn-mute.muted {
+            background: #dc3545;
+        }
+        .btn-end {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-accept {
+            background: #28a745;
+            color: white;
+        }
+        .btn-reject {
+            background: #6c757d;
+            color: white;
+        }
+        .incoming-controls {
+            display: none;
+        }
+        .active-controls {
+            display: none;
+        }
+        .incoming .incoming-controls {
+            display: flex;
+        }
+        .active .active-controls {
+            display: flex;
+        }
+        .incoming .call-container {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        .sound-indicator {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 12px;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+    <div id="callInterface" class="incoming">
+        <div class="call-container">
+            <div class="avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="call-status" id="callStatus">Incoming call...</div>
+            <div class="caller-name" id="callerName">Unknown</div>
+            <div class="call-timer" id="callTimer">00:00</div>
+
+            <!-- Incoming call controls -->
+            <div class="call-controls incoming-controls">
+                <button class="control-btn btn-reject" onclick="rejectCall()">
+                    <i class="fas fa-phone-slash"></i>
+                </button>
+                <button class="control-btn btn-accept" onclick="acceptCall()">
+                    <i class="fas fa-phone"></i>
+                </button>
+            </div>
+
+            <!-- Active call controls -->
+            <div class="call-controls active-controls">
+                <button class="control-btn btn-mute" id="muteBtn" onclick="toggleMute()">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <button class="control-btn btn-end" onclick="endCall()">
+                    <i class="fas fa-phone-slash"></i>
+                </button>
+            </div>
+        </div>
+        <div class="sound-indicator" id="soundIndicator">
+            <i class="fas fa-volume-up"></i> Audio active
+        </div>
+    </div>
+
+    <audio id="remoteAudio" autoplay></audio>
+    <audio id="localAudio" autoplay muted></audio>
+
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script>
+        // Get call parameters from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const callId = urlParams.get('call_id');
+        const userType = urlParams.get('user_type'); // 'driver' or 'customer'
+        const remoteId = urlParams.get('remote_id');
+        const remoteName = urlParams.get('remote_name');
+        const deliveryId = urlParams.get('delivery_id');
+        const isIncoming = urlParams.get('incoming') === 'true';
+        const socketNamespace = userType === 'driver' ? '/driver' : '/customer';
+        const roomName = userType === 'driver' ? `driver_${remoteId}` : `customer_${remoteId}`;
+
+        // Update UI with caller info
+        document.getElementById('callerName').textContent = remoteName || 'Unknown';
+        document.getElementById('callStatus').textContent = isIncoming ? 'Incoming call...' : 'Connecting...';
+
+        // WebRTC variables
+        let peerConnection = null;
+        let localStream = null;
+        let socket = null;
+        let callStartTime = null;
+        let callTimerInterval = null;
+        let isMuted = false;
+
+        // RTC config with TURN servers
+        const rtcConfig = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                {
+                    urls: 'turn:openrelay.metered.ca:80',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                },
+                {
+                    urls: 'turn:openrelay.metered.ca:443',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                }
+            ]
+        };
+
+        // Initialize Socket.IO
+        function initSocket() {
+            socket = io(socketNamespace, {
+                transports: ['websocket'],
+                reconnection: true,
+                withCredentials: true
+            });
+
+            socket.on('connect', () => {
+                console.log('[CALL POPUP] Socket connected:', socket.id);
+                // Authenticate
+                socket.emit('authenticate', userType === 'driver' ? { driver_id: remoteId } : { customer_id: remoteId });
+            });
+
+            // WebRTC signaling events
+            socket.on('webrtc_offer', async (data) => {
+                console.log('[CALL POPUP] Received offer:', data);
+                await handleOffer(data.offer);
+            });
+
+            socket.on('webrtc_answer', async (data) => {
+                console.log('[CALL POPUP] Received answer:', data);
+                await handleAnswer(data.answer);
+            });
+
+            socket.on('webrtc_ice_candidate', async (data) => {
+                console.log('[CALL POPUP] Received ICE candidate');
+                await handleIceCandidate(data.candidate);
+            });
+
+            socket.on('call_ended', () => {
+                console.log('[CALL POPUP] Call ended by remote');
+                cleanupAndClose();
+            });
+
+            socket.on('call_rejected', () => {
+                console.log('[CALL POPUP] Call rejected');
+                updateStatus('Call declined');
+                setTimeout(cleanupAndClose, 2000);
+            });
+
+            // Call acceptance events
+            if (userType === 'driver') {
+                socket.on('call_accepted_by_customer', async () => {
+                    console.log('[CALL POPUP] Customer accepted, creating offer');
+                    updateStatus('Connected');
+                    startCallTimer();
+                    await createOffer();
+                });
+            } else {
+                socket.on('call_accepted', async () => {
+                    console.log('[CALL POPUP] Driver accepted, creating offer');
+                    updateStatus('Connected');
+                    startCallTimer();
+                    await createOffer();
+                });
+            }
+        }
+
+        // WebRTC setup
+        async function setupWebRTC() {
+            try {
+                console.log('[CALL POPUP] Setting up WebRTC...');
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                peerConnection = new RTCPeerConnection(rtcConfig);
+
+                // Add local tracks
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // Handle remote audio
+                peerConnection.ontrack = (event) => {
+                    console.log('[CALL POPUP] Received remote track');
+                    document.getElementById('remoteAudio').srcObject = event.streams[0];
+                };
+
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate && socket) {
+                        socket.emit('webrtc_ice_candidate', {
+                            call_id: callId,
+                            candidate: event.candidate
+                        });
+                    }
+                };
+
+                // Connection state monitoring
+                peerConnection.onconnectionstatechange = () => {
+                    console.log('[CALL POPUP] Connection state:', peerConnection.connectionState);
+                    if (peerConnection.connectionState === 'connected') {
+                        updateStatus('Connected');
+                        showActiveControls();
+                    } else if (peerConnection.connectionState === 'failed') {
+                        updateStatus('Connection failed');
+                    }
+                };
+
+                console.log('[CALL POPUP] WebRTC setup complete');
+            } catch (error) {
+                console.error('[CALL POPUP] WebRTC setup error:', error);
+            }
+        }
+
+        async function createOffer() {
+            try {
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                socket.emit('webrtc_offer', { call_id: callId, offer });
+                console.log('[CALL POPUP] Offer created and sent');
+            } catch (error) {
+                console.error('[CALL POPUP] Error creating offer:', error);
+            }
+        }
+
+        async function handleOffer(offer) {
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                socket.emit('webrtc_answer', { call_id: callId, answer });
+                console.log('[CALL POPUP] Answer created and sent');
+                updateStatus('Connected');
+                showActiveControls();
+            } catch (error) {
+                console.error('[CALL POPUP] Error handling offer:', error);
+            }
+        }
+
+        async function handleAnswer(answer) {
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                console.log('[CALL POPUP] Answer set successfully');
+            } catch (error) {
+                console.error('[CALL POPUP] Error handling answer:', error);
+            }
+        }
+
+        async function handleIceCandidate(candidate) {
+            try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (error) {
+                console.error('[CALL POPUP] Error adding ICE candidate:', error);
+            }
+        }
+
+        // Call controls
+        function acceptCall() {
+            console.log('[CALL POPUP] Accepting call');
+            document.getElementById('callInterface').classList.remove('incoming');
+            document.getElementById('callInterface').classList.add('active');
+            document.getElementById('callStatus').textContent = 'Connecting...';
+
+            setupWebRTC().then(() => {
+                // Notify server
+                if (userType === 'customer') {
+                    socket.emit('call_accept_driver_call', {
+                        driver_id: remoteId,
+                        delivery_id: deliveryId,
+                        call_id: callId
+                    });
+                } else {
+                    socket.emit('call_accept', {
+                        customer_id: remoteId,
+                        delivery_id: deliveryId,
+                        call_id: callId
+                    });
+                }
+            });
+        }
+
+        function rejectCall() {
+            console.log('[CALL POPUP] Rejecting call');
+            socket.emit(userType === 'driver' ? 'call_reject' : 'call_reject', {
+                [userType === 'driver' ? 'customer_id' : 'driver_id']: remoteId,
+                call_id: callId
+            });
+            cleanupAndClose();
+        }
+
+        function endCall() {
+            console.log('[CALL POPUP] Ending call');
+            socket.emit('call_end', {
+                [userType === 'driver' ? 'customer_id' : 'driver_id']: remoteId,
+                delivery_id: deliveryId,
+                call_id: callId
+            });
+            cleanupAndClose();
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            localStream.getAudioTracks().forEach(track => {
+                track.enabled = !isMuted;
+            });
+            const btn = document.getElementById('muteBtn');
+            btn.classList.toggle('muted', isMuted);
+            btn.innerHTML = isMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
+        }
+
+        function startCallTimer() {
+            callStartTime = Date.now();
+            callTimerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+                const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const secs = (elapsed % 60).toString().padStart(2, '0');
+                document.getElementById('callTimer').textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function updateStatus(status) {
+            document.getElementById('callStatus').textContent = status;
+        }
+
+        function showActiveControls() {
+            document.getElementById('callInterface').classList.remove('incoming');
+            document.getElementById('callInterface').classList.add('active');
+        }
+
+        function cleanupAndClose() {
+            clearInterval(callTimerInterval);
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            if (socket) {
+                socket.disconnect();
+            }
+            window.close();
+        }
+
+        // Initialize based on call direction
+        if (isIncoming) {
+            document.getElementById('callInterface').classList.add('incoming');
+            initSocket();
+        } else {
+            // Outgoing call
+            document.getElementById('callInterface').classList.add('active');
+            initSocket();
+            setupWebRTC();
+        }
+
+        // Handle window close
+        window.addEventListener('beforeunload', () => {
+            if (socket && callId) {
+                socket.emit('call_end', {
+                    [userType === 'driver' ? 'customer_id' : 'driver_id']: remoteId,
+                    call_id: callId
+                });
+            }
+        });
+    </script>
+</body>
+</html>
