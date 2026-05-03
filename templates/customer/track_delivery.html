@@ -867,7 +867,18 @@ document.addEventListener('DOMContentLoaded', function () {
   const rtcConfig = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
+      { urls: 'stun:stun1.l.google.com:19302' },
+      // Free TURN servers for production (relay when direct connection fails)
+      {
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      }
     ]
   };
 
@@ -917,6 +928,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
       peerConnection.oniceconnectionstatechange = () => {
         console.log('[TRACK] ICE connection state:', peerConnection.iceConnectionState);
+      };
+
+      peerConnection.onicegatheringstatechange = () => {
+        console.log('[TRACK] ICE gathering state:', peerConnection.iceGatheringState);
+        if (peerConnection.iceGatheringState === 'complete') {
+          console.log('[TRACK] ICE gathering complete');
+        }
       };
 
       peerConnection.onconnectionstatechange = () => {
