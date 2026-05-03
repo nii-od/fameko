@@ -1127,7 +1127,7 @@ function connectSocketIO() {
                 if (window.outgoingCallInfo) {
                     acceptIncomingWhileCalling();
                 }
-                // Initiate WebRTC audio connection
+                // Initiate WebRTC audio connection - driver creates offer (as caller)
                 setupWebRTC().then(() => {
                     console.log('[DRIVER] WebRTC setup complete, creating offer');
                     createOffer();
@@ -1275,10 +1275,9 @@ function acceptDriverCall() {
 
     window.driverCallSocket.emit('call_accept', callData);
 
-    // Initiate WebRTC audio connection
+    // Setup WebRTC and wait for offer from customer (customer is the caller)
     setupWebRTC().then(() => {
-        console.log('[DRIVER] WebRTC setup complete, creating offer');
-        createOffer();
+        console.log('[DRIVER] WebRTC setup complete - waiting for customer offer');
     }).catch(err => {
         console.error('[DRIVER] WebRTC setup failed:', err);
     });
