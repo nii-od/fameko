@@ -3353,6 +3353,20 @@ async function setupWebRTC() {
             console.log('[DRIVER] ICE connection state:', peerConnection.iceConnectionState);
         };
 
+        peerConnection.onconnectionstatechange = () => {
+            console.log('[DRIVER] Connection state:', peerConnection.connectionState);
+            if (peerConnection.connectionState === 'connected') {
+                console.log('[DRIVER] ✓ WebRTC connected!');
+                // Update UI to show connected
+                const statusEl = document.getElementById('call-status-text');
+                if (statusEl) statusEl.textContent = 'Connected';
+            } else if (peerConnection.connectionState === 'failed') {
+                console.error('[DRIVER] ✗ WebRTC connection failed');
+                const statusEl = document.getElementById('call-status-text');
+                if (statusEl) statusEl.textContent = 'Connection failed';
+            }
+        };
+
         console.log('[DRIVER] WebRTC setup complete');
         return peerConnection;
     } catch (error) {
@@ -3367,14 +3381,18 @@ async function createOffer() {
             await setupWebRTC();
         }
 
+        const callId = window.driverCallSocket.currentCallId();
+        console.log('[DRIVER] Creating offer for call_id:', callId);
+
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
 
-        console.log('[DRIVER] Created offer, sending to peer');
+        console.log('[DRIVER] Created offer, sending to peer. Call ID:', callId);
         window.driverCallSocket.emit('webrtc_offer', {
-            call_id: window.driverCallSocket.currentCallId(),
+            call_id: callId,
             offer: offer
         });
+        console.log('[DRIVER] Offer emitted to server');
     } catch (error) {
         console.error('[DRIVER] Error creating offer:', error);
     }
@@ -3382,21 +3400,28 @@ async function createOffer() {
 
 async function handleOffer(offer) {
     try {
-        console.log('[DRIVER] Received offer, creating answer');
+        const callId = window.driverCallSocket.currentCallId();
+        console.log('[DRIVER] Received offer, creating answer. Call ID:', callId);
         if (!peerConnection) {
+            console.log('[DRIVER] No peer connection, setting up WebRTC');
             await setupWebRTC();
         }
 
+        console.log('[DRIVER] Setting remote description (offer)');
         await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        console.log('[DRIVER] Remote description set');
 
         const answer = await peerConnection.createAnswer();
+        console.log('[DRIVER] Answer created');
         await peerConnection.setLocalDescription(answer);
+        console.log('[DRIVER] Local description set (answer)');
 
-        console.log('[DRIVER] Created answer, sending to peer');
+        console.log('[DRIVER] Sending answer to peer. Call ID:', callId);
         window.driverCallSocket.emit('webrtc_answer', {
-            call_id: window.driverCallSocket.currentCallId(),
+            call_id: callId,
             answer: answer
         });
+        console.log('[DRIVER] Answer emitted to server');
     } catch (error) {
         console.error('[DRIVER] Error handling offer:', error);
     }
@@ -3404,12 +3429,16 @@ async function handleOffer(offer) {
 
 async function handleAnswer(answer) {
     try {
-        console.log('[DRIVER] Received answer');
+        const callId = window.driverCallSocket.currentCallId();
+        console.log('[DRIVER] Received answer for call:', callId);
         if (!peerConnection) {
+            console.log('[DRIVER] No peer connection, setting up WebRTC');
             await setupWebRTC();
         }
 
+        console.log('[DRIVER] Setting remote description (answer)');
         await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        console.log('[DRIVER] Answer set successfully');
     } catch (error) {
         console.error('[DRIVER] Error handling answer:', error);
     }
