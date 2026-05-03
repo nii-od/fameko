@@ -52,7 +52,13 @@
     <!-- Main Map Container -->
     <div class="map-container-main">
         <!-- Map -->
-        <div id="map" data-driver-id="{{ current_user.id if current_user else '' }}" style="height: 100%; width: 100%; position: relative;"></div>
+        <div id="map" data-driver-id="{{ current_user.id if current_user else '' }}" style="height: 100%; width: 100%; position: relative;">
+            <!-- Map Rotation Toggle -->
+            <button id="rotationToggle" onclick="toggleMapRotation()" style="position: absolute; bottom: 80px; right: 20px; z-index: 1000; background: white; border: none; border-radius: 8px; padding: 10px 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: #333;">
+                <i class="fas fa-compass" id="rotationIcon"></i>
+                <span id="rotationText">North Up</span>
+            </button>
+        </div>
         
         <!-- Right Sidebar -->
         <div class="sidebar-panel">
@@ -590,6 +596,125 @@ function startGeoLocationTracking() {
             maximumAge: 0
         }
     );
+
+    // Enable device orientation for map rotation (like native nav apps)
+    enableMapRotation();
+}
+
+// Enable map rotation based on device orientation
+let deviceOrientationActive = false;
+function enableMapRotation() {
+    if (deviceOrientationActive) return;
+
+    // Check for device orientation support
+    if (window.DeviceOrientationEvent) {
+        // Request permission on iOS 13+
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // Will be requested on user interaction
+            console.log('[MAP] Device orientation available (permission required)');
+        } else {
+            // Android and older iOS - start immediately
+            window.addEventListener('deviceorientation', handleDeviceOrientation);
+            deviceOrientationActive = true;
+            console.log('[MAP] Device orientation tracking enabled');
+        }
+    }
+}
+
+// Request orientation permission (call this on user interaction)
+function requestOrientationPermission() {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+            .then(permissionState => {
+                if (permissionState === 'granted') {
+                    window.addEventListener('deviceorientation', handleDeviceOrientation);
+                    deviceOrientationActive = true;
+                    console.log('[MAP] Device orientation permission granted');
+
+                    // Enable rotation in UI
+                    const btn = document.getElementById('rotationToggle');
+                    const icon = document.getElementById('rotationIcon');
+                    const text = document.getElementById('rotationText');
+                    icon.className = 'fas fa-compass fa-spin';
+                    text.textContent = 'Heading Up';
+                    btn.style.background = '#28a745';
+                    btn.style.color = 'white';
+                }
+            })
+            .catch(console.error);
+    }
+}
+
+// Handle device orientation changes
+function handleDeviceOrientation(event) {
+    if (!map || !mapRotationEnabled) return;
+
+    // Get compass heading (alpha for Android, webkitCompassHeading for iOS)
+    let heading = event.alpha; // 0-360 degrees, 0 = north
+
+    // iOS uses webkitCompassHeading
+    if (event.webkitCompassHeading !== undefined) {
+        heading = event.webkitCompassHeading;
+    }
+
+    // Only rotate if we have valid heading
+    if (heading !== null && heading !== undefined) {
+        // Rotate map to match device orientation (heading points up)
+        map.setBearing(heading);
+
+        // Optional: also pitch the map for 3D effect when moving
+        // map.setPitch(45);
+    }
+}
+
+// Map rotation toggle state
+let mapRotationEnabled = false;
+
+function toggleMapRotation() {
+    const btn = document.getElementById('rotationToggle');
+    const icon = document.getElementById('rotationIcon');
+    const text = document.getElementById('rotationText');
+
+    if (!mapRotationEnabled) {
+        // Enable rotation
+        mapRotationEnabled = true;
+
+        // Request permission if needed (iOS)
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            requestOrientationPermission();
+        } else {
+            // Android - start immediately
+            if (!deviceOrientationActive) {
+                window.addEventListener('deviceorientation', handleDeviceOrientation);
+                deviceOrientationActive = true;
+            }
+        }
+
+        // Update UI
+        icon.className = 'fas fa-compass fa-spin';
+        text.textContent = 'Heading Up';
+        btn.style.background = '#28a745';
+        btn.style.color = 'white';
+
+        console.log('[MAP] Map rotation enabled - heading up');
+    } else {
+        // Disable rotation
+        mapRotationEnabled = false;
+
+        // Reset map to north up
+        if (map) {
+            map.setBearing(0);
+            map.setPitch(0);
+        }
+
+        // Update UI
+        icon.className = 'fas fa-compass';
+        text.textContent = 'North Up';
+        btn.style.background = 'white';
+        btn.style.color = '#333';
+
+        console.log('[MAP] Map rotation disabled - north up');
+    }
 }
 
 // Update driver's location on server
