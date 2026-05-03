@@ -1124,10 +1124,18 @@ document.addEventListener('DOMContentLoaded', function () {
     console.log('[TRACK] Call accepted by driver:', data);
     stopIncomingCallSound();
     currentCallId = data.call_id;
-    document.getElementById('call-status-text').textContent = 'Connected';
+    document.getElementById('call-status-text').textContent = 'Connecting audio...';
     document.getElementById('call-status-icon').innerHTML = '<i class="fas fa-phone" style="animation: pulse 1s infinite;"></i>';
     callStartTime = Date.now();
     startCallTimer();
+
+    // Customer initiated call - customer creates offer (as caller)
+    setupWebRTC().then(() => {
+      console.log('[TRACK] WebRTC setup complete, creating offer');
+      createOffer();
+    }).catch(err => {
+      console.error('[TRACK] WebRTC setup failed:', err);
+    });
   });
 
   socket.on('call_rejected', (data) => {
@@ -1196,7 +1204,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // If this is a driver-initiated call (driver_call_incoming event), send call_accept_driver_call
     // Otherwise ignore (customer should not emit 'call_accept' on /customer namespace)
     if (isDriverInitiatedCall) {
-      console.log('[TRACK] Accepting driver-initiated call');
+      console.log('[TRACK] Accepting driver-initiated call - waiting for driver offer');
       socket.emit('call_accept_driver_call', {
         driver_id: driverId,
         delivery_id: deliveryId,
@@ -1204,10 +1212,9 @@ document.addEventListener('DOMContentLoaded', function () {
       });
       isDriverInitiatedCall = false;
 
-      // Initiate WebRTC audio connection
+      // Just setup WebRTC, wait for offer from driver (the caller creates offer)
       setupWebRTC().then(() => {
-        console.log('[TRACK] WebRTC setup complete, creating offer');
-        createOffer();
+        console.log('[TRACK] WebRTC setup complete - waiting for driver offer');
       }).catch(err => {
         console.error('[TRACK] WebRTC setup failed:', err);
       });
