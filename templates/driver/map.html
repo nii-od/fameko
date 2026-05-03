@@ -3364,6 +3364,13 @@ async function setupWebRTC() {
             console.log('[DRIVER] ICE connection state:', peerConnection.iceConnectionState);
         };
 
+        peerConnection.onicegatheringstatechange = () => {
+            console.log('[DRIVER] ICE gathering state:', peerConnection.iceGatheringState);
+            if (peerConnection.iceGatheringState === 'complete') {
+                console.log('[DRIVER] ICE gathering complete');
+            }
+        };
+
         peerConnection.onconnectionstatechange = () => {
             console.log('[DRIVER] Connection state:', peerConnection.connectionState);
             if (peerConnection.connectionState === 'connected') {
