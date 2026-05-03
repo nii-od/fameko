@@ -1108,8 +1108,19 @@ function connectSocketIO() {
 
                 // Create and show call modal
                 showIncomingCallModal(data);
-                
+
             } catch (e) { console.error('[DRIVER] Error handling incoming call:', e); }
+        });
+
+        // Store call_id when we initiate a call (for outgoing calls)
+        socket.on('call_initiated', (data) => {
+            try {
+                console.log('[DRIVER] Call initiated:', data);
+                if (data.call_id) {
+                    currentCallId = data.call_id;
+                    console.log('[DRIVER] Current call ID set for outgoing call:', currentCallId);
+                }
+            } catch (e) { console.error('[DRIVER] Error handling call_initiated:', e); }
         });
 
         socket.on('call_ended', (data) => {
