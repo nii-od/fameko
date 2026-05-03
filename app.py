@@ -827,7 +827,7 @@ def create_app(config=None):
     @login_required
     def unified_conversation(conv_id):
         """Unified conversation page accessible to both customer and driver"""
-        from models import Conversation, Delivery
+        from models import Conversation, Delivery, Order, Customer
         from sqlalchemy.orm import joinedload
         
         conv = Conversation.query.get_or_404(conv_id)
@@ -835,7 +835,7 @@ def create_app(config=None):
         # Load delivery with order and customer relationships
         if conv.delivery_id:
             delivery = Delivery.query.options(
-                joinedload(Delivery.order).joinedload('customer'),
+                joinedload(Delivery.order).joinedload(Order.customer),
                 joinedload(Delivery.driver)
             ).get(conv.delivery_id)
         else:
