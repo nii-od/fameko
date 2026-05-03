@@ -41,7 +41,7 @@
                         {% if user_type == 'customer' and delivery %}
                             With {{ delivery.driver.full_name if delivery.driver else 'Driver' }}
                         {% elif user_type == 'driver' and delivery %}
-                            With {{ delivery.customer.name if delivery.customer else 'Customer' }}
+                            With {{ delivery.order.customer.name if delivery.order and delivery.order.customer else 'Customer' }}
                         {% else %}
                             Delivery #{{ conv.delivery_id if conv else 'Unknown' }}
                         {% endif %}
