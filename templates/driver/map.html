@@ -1317,56 +1317,78 @@ function connectSocketIO() {
     }
 }
 
-// Show incoming call modal for driver
+// Show incoming call - opens popup and shows minimized inline indicator
 function showIncomingCallModal(data) {
-    // Create minimal popup HTML - horizontal layout like customer, purple theme with transparency
-    const modalHTML = `
-        <div id="incomingCallModal" style="position: fixed; top: 20px; right: 20px; z-index: 9999; background: rgba(102, 126, 234, 0.7); border-radius: 12px; padding: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); width: 320px; display: flex; align-items: center; gap: 12px; color: white;">
-            <div id="call-status-icon" style="font-size: 20px; width: 36px; text-align: center; opacity: 0.95;">
-                <i class="fas fa-phone" style="animation: pulse 1s infinite;"></i>
-            </div>
+    // Store current call info globally
+    window.currentCallInfo = {
+        call_id: data.call_id,
+        user_type: 'driver',
+        remote_id: data.customer_id,
+        remote_name: data.customer_name || 'Customer',
+        delivery_id: data.delivery_id,
+        incoming: true
+    };
 
-            <div style="flex: 1; min-width: 0;">
-                <div id="incoming-caller-name" style="font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    ${data.customer_name || 'Customer'}
-                </div>
-                <div style="font-size: 12px; opacity: 0.9;">is calling</div>
-                <div style="font-size: 12px; opacity: 0.9;">Delivery #${data.delivery_id}</div>
-                <div id="incoming-call-meta" data-customer-id="${data.customer_id || ''}" data-delivery-id="${data.delivery_id || ''}" data-call-id="${data.call_id || ''}" style="display:none;"></div>
-            </div>
+    // Open the call popup window immediately
+    openCallPopup(window.currentCallInfo);
 
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <button type="button" class="btn btn-sm" onclick="rejectCall()"
-                        style="background: rgba(220, 38, 38, 0.8); border: none; color: white; border-radius: 6px; padding: 8px 10px;">
-                    <i class="fas fa-phone-slash"></i>
-                </button>
-                <button type="button" class="btn btn-sm" onclick="acceptDriverCall()"
-                        style="background: rgba(76, 175, 80, 0.8); border: none; color: white; border-radius: 6px; padding: 8px 10px;">
-                    <i class="fas fa-phone"></i>
-                </button>
+    // Show minimized inline indicator that can restore the popup
+    showMinimizedCallIndicator(data.customer_name || 'Customer', 'Incoming call...', 'incoming');
+}
+
+// Show minimized call indicator that restores popup when clicked
+function showMinimizedCallIndicator(name, status, type) {
+    const existing = document.getElementById('minimized-call-indicator');
+    if (existing) existing.remove();
+
+    const isIncoming = type === 'incoming';
+    const bgColor = isIncoming ? 'rgba(102, 126, 234, 0.9)' : 'rgba(40, 167, 69, 0.9)';
+    const icon = isIncoming ? 'fa-phone-volume' : 'fa-phone';
+    const pulseAnim = isIncoming ? 'animation: pulse 1s infinite;' : '';
+
+    const indicatorHTML = `
+        <div id="minimized-call-indicator" onclick="restoreCallPopup()" style="
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            background: ${bgColor};
+            border-radius: 50px;
+            padding: 12px 20px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            transition: transform 0.2s;
+        " onmouseover="this.style.transform='scale(1.05)" onmouseout="this.style.transform='scale(1)'">
+            <i class="fas ${icon}" style="font-size: 18px; ${pulseAnim}"></i>
+            <div style="display: flex; flex-direction: column;">
+                <span style="font-weight: 600; font-size: 14px;">${name}</span>
+                <span style="font-size: 11px; opacity: 0.9;">${status}</span>
             </div>
+            <i class="fas fa-expand" style="margin-left: 8px; opacity: 0.7; font-size: 12px;"></i>
         </div>
     `;
 
-    // Remove existing modal if present
-    const existing = document.getElementById('incomingCallModal');
-    if (existing) existing.remove();
+    document.body.insertAdjacentHTML('beforeend', indicatorHTML);
+}
 
-    // Add modal to page
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-
-    // Add CSS animation if not already present
-    if (!document.getElementById('pulse-animation')) {
-        const style = document.createElement('style');
-        style.id = 'pulse-animation';
-        style.textContent = `
-            @keyframes pulse {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.5; }
-            }
-        `;
-        document.head.appendChild(style);
+// Restore call popup window when minimized indicator is clicked
+function restoreCallPopup() {
+    console.log('[DRIVER] Restoring call popup');
+    if (window.currentCallInfo) {
+        openCallPopup(window.currentCallInfo);
     }
+}
+
+// Remove minimized indicator when call ends
+function removeMinimizedCallIndicator() {
+    const indicator = document.getElementById('minimized-call-indicator');
+    if (indicator) indicator.remove();
+    window.currentCallInfo = null;
 }
 
 function acceptDriverCall() {
@@ -1458,11 +1480,14 @@ function endDriverCall() {
     const timerEl = document.getElementById('driver-call-timer');
     if (timerEl) timerEl.style.display = 'none';
 
-    // Remove incoming call popup element
+    // Remove minimized call indicator
+    removeMinimizedCallIndicator();
+
+    // Remove incoming call popup element (legacy cleanup)
     const incomingModal = document.getElementById('incomingCallModal');
     if (incomingModal) incomingModal.remove();
 
-    // Remove outgoing call popup element (if driver initiated the call)
+    // Remove outgoing call popup element (legacy cleanup)
     const outgoingModal = document.getElementById('outgoingCallModal');
     if (outgoingModal) outgoingModal.remove();
 
@@ -3177,49 +3202,29 @@ function callCustomerFromMap() {
     }
 }
 
-// Show outgoing call modal for driver
+// Show outgoing call - opens popup and shows minimized inline indicator
 function showDriverOutgoingCallModal(customerName, customerId, deliveryId, driverId) {
-    // Create minimal popup HTML - horizontal layout like incoming call, purple theme with transparency
-    const modalHTML = `
-        <div id="outgoingCallModal" style="position: fixed; top: 20px; right: 20px; z-index: 9999; background: rgba(102, 126, 234, 0.7); border-radius: 12px; padding: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); width: 320px; display: flex; align-items: center; gap: 12px; color: white;">
-            <div id="outgoing-call-icon" style="font-size: 20px; width: 36px; text-align: center; opacity: 0.95;">
-                <i class="fas fa-phone" style="animation: pulse 1s infinite;"></i>
-            </div>
+    // Store current call info globally
+    window.currentCallInfo = {
+        call_id: null, // Will be set when call_initiated is received
+        user_type: 'driver',
+        remote_id: customerId,
+        remote_name: customerName,
+        delivery_id: deliveryId,
+        incoming: false
+    };
 
-            <div style="flex: 1; min-width: 0;">
-                <div id="outgoing-customer-name" style="font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    ${customerName}
-                </div>
-                <div id="outgoing-call-status" style="font-size: 12px; opacity: 0.9;">Calling...</div>
-                <div id="outgoing-call-timer" style="font-size: 12px; opacity: 0.9; display: none;">00:00</div>
-            </div>
+    // Popup will be opened when call_initiated event is received
+    // Show minimized inline indicator
+    showMinimizedCallIndicator(customerName, 'Calling...', 'outgoing');
 
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <button type="button" class="btn btn-sm" onclick="endOutgoingCall()" 
-                        style="background: rgba(220, 38, 38, 0.8); border: none; color: white; border-radius: 6px; padding: 8px 10px;">
-                    <i class="fas fa-phone-slash"></i>
-                </button>
-            </div>
-        </div>
-    `;
-    
-    // Remove existing modal if present
-    const existing = document.getElementById('outgoingCallModal');
-    if (existing) existing.remove();
-    
-    // Add modal to page
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-    
-    // Store call info globally
-    window.outgoingCallInfo = {
+    // Store call info for later
+    window.pendingOutgoingCall = {
+        customerName: customerName,
         customerId: customerId,
         deliveryId: deliveryId,
-        driverId: driverId,
-        callStartTime: null,
-        timerInterval: null
+        driverId: driverId
     };
-    
-    console.log('[DRIVER] Outgoing call modal shown for customer', customerId);
 }
 
 // Accept incoming call from customer (while driver is calling)
